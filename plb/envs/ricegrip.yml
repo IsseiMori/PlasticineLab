@@ -1,0 +1,83 @@
+SIMULATOR:
+  E: 5000.
+  n_particles: 5000
+  yield_stress: 50.
+  ground_friction: 200.
+SHAPES:
+  - shape: box
+    n_particles: 5000
+    width: (0.20, 0.20, 0.20)
+    init_pos: (0.5, 0.1, 0.5)
+    color: ((((200 << 8) + 200) << 8) + 0)
+PRIMITIVES:
+  - shape: Box
+    size: (0.03, 0.16, 0.03)
+    init_pos: (0.2, 0.2, 0.2)
+    init_rot: (0., 0., 0., 1.)
+    lower_bound: (0., 0., 0.)
+    color: (0.8, 0.8, 0.8)
+    friction: 0.
+    action:
+      dim: 3
+      scale: (0.01, 0.01, 0.01)
+  - shape: Box
+    size: (0.04, 0.16, 0.04)
+    init_pos: (0.2, 0.2, 0.2)
+    init_rot: (0., 0., 0., 1.)
+    lower_bound: (0., 0., 0.)
+    color: (0.8, 0.8, 0.8)
+    friction: 0.
+    action:
+      dim: 3
+      scale: (0.01, 0.01, 0.01)
+RENDERER:
+  spp: 1
+  camera_pos: (0.5, 2., 1.2)
+  camera_rot: (1.3, 0.)
+  use_directional_light: True
+VARIANTS:
+  - SHAPES:
+      - width: (0.20, 0.20, 0.20)
+      - init_pos: (0.5, 0.1, 0.5)
+    PRIMITIVES:
+      - init_pos: (0.2, 0.2, 0.2)
+      - init_pos: (0.2, 0.2, 0.2)
+    ENV:
+      loss:
+        target_path: envs/assets/RiceGrip-v1.npy
+  - SHAPES:
+      - width: (0.20, 0.20, 0.20)
+      - init_pos: (0.5, 0.1, 0.5)
+    PRIMITIVES:
+      - init_pos: (0.2, 0.2, 0.2)
+      - init_pos: (0.2, 0.2, 0.2)
+    ENV:
+      loss:
+        target_path: envs/assets/RiceGrip-v1.npy
+  - SHAPES:
+      - width: (0.20, 0.20, 0.20)
+      - init_pos: (0.5, 0.1, 0.5)
+    PRIMITIVES:
+      - init_pos: (0.2, 0.2, 0.2)
+      - init_pos: (0.2, 0.2, 0.2)
+    ENV:
+      loss:
+        target_path: envs/assets/RiceGrip-v1.npy
+  - SHAPES:
+      - width: (0.20, 0.20, 0.20)
+      - init_pos: (0.5, 0.1, 0.5)
+    PRIMITIVES:
+      - init_pos: (0.2, 0.2, 0.2)
+      - init_pos: (0.2, 0.2, 0.2)
+    ENV:
+      loss:
+        target_path: envs/assets/RiceGrip-v1.npy
+  - SHAPES:
+      - width: (0.20, 0.20, 0.20)
+      - init_pos: (0.5, 0.1, 0.5)
+    PRIMITIVES:
+      - init_pos: (0.2, 0.2, 0.2)
+      - init_pos: (0.2, 0.2, 0.2)
+    ENV:
+      loss:
+        target_path: envs/assets/RiceGrip-v1.npy

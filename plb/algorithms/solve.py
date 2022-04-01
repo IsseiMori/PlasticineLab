@@ -11,6 +11,7 @@ from plb.algorithms.ppo.run_ppo import train_ppo
 from plb.algorithms.TD3.run_td3 import train_td3
 from plb.optimizer.solver import solve_action
 from plb.optimizer.solver_nn import solve_nn
+from plb.optimizer.solver_mat import solve_mat
 
 RL_ALGOS = ['sac', 'td3', 'ppo']
 DIFF_ALGOS = ['action', 'nn']
@@ -69,6 +70,8 @@ def main():
         train_td3(env, args.path, logger, args)
     elif args.algo == 'nn':
         solve_nn(env, args.path, logger, args)
+    elif args.algo == 'mat':
+        solve_mat(env, args.path, logger, args)
     else:
         raise NotImplementedError
 

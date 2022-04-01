@@ -83,7 +83,7 @@ class Solver:
         return cfg
 
 
-def solve_action(env, path, logger, args):
+def solve_mat(env, path, logger, args):
     import os, cv2
     os.makedirs(path, exist_ok=True)
     env.reset()

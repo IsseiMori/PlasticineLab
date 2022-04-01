@@ -3,7 +3,7 @@ from .env import PlasticineEnv
 from gym import register
 
 ENVS = []
-for env_name in ['Move', 'Torus', 'Rope', 'Writer', "Pinch", "Rollingpin", "Chopsticks", "Table", 'TripleMove', 'Assembly']:
+for env_name in ['Move', 'Torus', 'Rope', 'Writer', "Pinch", "Rollingpin", "Chopsticks", "Table", 'TripleMove', 'Assembly', 'RiceGrip']:
     for id in range(5):
         register(
             id = f'{env_name}-v{id+1}',
