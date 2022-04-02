@@ -60,8 +60,8 @@ class Solver:
         actions = init_actions
         mat = material_params
         for iter in range(self.cfg.n_iters):
-            # self.params = actions.copy() # no doing anything
-            self.params = mat.copy() # no doing anything
+            # self.params = actions.copy() # not doing anything
+            self.params = mat.copy() # not doing anything
             loss, grad = forward(env_state['state'], actions, mat)
             print('material_params', mat)
             print('env.simulator', env.simulator.yield_stress)
