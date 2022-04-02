@@ -1,6 +1,7 @@
 import taichi as ti
 import numpy as np
 from yacs.config import CfgNode as CN
+import os
 
 from .optim import Optimizer, Adam, Momentum
 from ..engine.taichi_env import TaichiEnv
@@ -37,7 +38,7 @@ class Solver:
                 for i in range(len(action)):
                     env.step(action[i])
                     self.total_steps += 1
-                    loss_info = env.compute_loss()
+                    loss_info = env.compute_loss_seq(i)
                     if self.logger is not None:
                         self.logger.step(None, None, loss_info['reward'], None, i==len(action)-1, loss_info)
             loss = env.loss.loss[None]
@@ -65,10 +66,18 @@ class Solver:
     def init_actions(env, cfg):
         action_dim = env.primitives.action_dim
         horizon = cfg.horizon
-        if cfg.init_sampler == 'uniform':
-            return np.random.uniform(-cfg.init_range, cfg.init_range, size=(horizon, action_dim))
-        else:
-            raise NotImplementedError
+        # if cfg.init_sampler == 'uniform':
+        #     return np.random.uniform(-cfg.init_range, cfg.init_range, size=(horizon, action_dim))
+        # else:
+        #     raise NotImplementedError
+
+        # Import and reshape the action sequence
+        states = np.load(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../', env.cfg.loss.action_path), allow_pickle=True).item()
+        actions = states['shape_states'][0]
+        actions = (states['shape_states'][0, 1:, :, 0:3] - states['shape_states'][0, 0:-1, :, 0:3]) * 100
+        actions = actions.reshape(actions.shape[0], -1)
+
+        return actions
 
     @classmethod
     def default_config(cls):
@@ -76,7 +85,7 @@ class Solver:
         cfg.optim = Optimizer.default_config()
         cfg.n_iters = 100
         cfg.softness = 666.
-        cfg.horizon = 50
+        cfg.horizon = 39
 
         cfg.init_range = 0.
         cfg.init_sampler = 'uniform'
@@ -88,7 +97,11 @@ def solve_mat(env, path, logger, args):
     os.makedirs(path, exist_ok=True)
     env.reset()
     taichi_env: TaichiEnv = env.unwrapped.taichi_env
+    env._max_episode_steps = 39 # overwrite frame count
     T = env._max_episode_steps
+
+
+
     solver = Solver(taichi_env, logger, None,
                     n_iters=(args.num_steps + T-1)//T, softness=args.softness, horizon=T,
                     **{"optim.lr": args.lr, "optim.type": args.optim, "init_range": 0.0001})

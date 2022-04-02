@@ -18,6 +18,7 @@ class TaichiEnv:
         from .renderer import Renderer
         from .shapes import Shapes
         from .losses import Loss
+        from .losses import LossSeq
         from .nn.mlp import MLP
 
         self.cfg = cfg.ENV
@@ -35,7 +36,7 @@ class TaichiEnv:
             self.nn = MLP(self.simulator, self.primitives, (256, 256))
 
         if loss:
-            self.loss = Loss(cfg.ENV.loss, self.simulator)
+            self.loss = LossSeq(cfg.ENV.loss, self.simulator)
         else:
             self.loss = None
         self._is_copy = True
@@ -87,6 +88,14 @@ class TaichiEnv:
             return self.loss.compute_loss(0)
         else:
             return self.loss.compute_loss(self.simulator.cur)
+    
+    def compute_loss_seq(self, step):
+        assert self.loss is not None
+        if self._is_copy:
+            self.loss.clear()
+            return self.loss.compute_loss(0, step)
+        else:
+            return self.loss.compute_loss(self.simulator.cur, step)
 
     def get_state(self):
         assert self.simulator.cur == 0

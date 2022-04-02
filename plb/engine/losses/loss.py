@@ -46,7 +46,7 @@ class Loss:
     def load_target_density(self, path=None, grids=None):
         if path is not None or grids is not None:
             if path is not None and len(path) > 0:
-                grids = np.load(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../', path))[0]
+                grids = np.load(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../', path))
             else:
                 grids = np.array(grids)
             self.target_density.from_numpy(grids)

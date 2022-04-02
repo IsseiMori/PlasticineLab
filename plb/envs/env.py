@@ -80,6 +80,7 @@ class PlasticineEnv(gym.Env):
         name = list(cfg.ENV.loss.target_path)
         name[-5] = str(version)
         cfg.ENV.loss.target_path = os.path.join(PATH, '../', ''.join(name))
+        cfg.ENV.loss.action_path = os.path.join(PATH, '../', cfg.ENV.loss.action_path)
         cfg.VARIANTS = None
         cfg.freeze()
 

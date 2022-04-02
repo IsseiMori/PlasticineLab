@@ -68,6 +68,7 @@ loss_weight.sdf = 10
 loss_weight.density = 10
 loss_weight.contact = 1
 loss.target_path = ''
+loss.action_path = ''
 
 ENV.n_observed_particles = 200
 

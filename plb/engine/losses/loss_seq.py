@@ -27,6 +27,7 @@ class LossSeq:
 
         #----------------------------------------
         self.target_density = ti.field(dtype=dtype, shape=self.res)
+        self.target_density_seq = ti.field(dtype=dtype, shape=(39, ) + (self.res)) # hard coded sequence length
         self.target_sdf = ti.field(dtype=dtype, shape=self.res)
         self.nearest_point = ti.Vector.field(self.dim, dtype=dtype, shape=self.res)
         self.target_sdf_copy = ti.field(dtype=dtype, shape=self.res)
@@ -46,10 +47,13 @@ class LossSeq:
     def load_target_density(self, path=None, grids=None):
         if path is not None or grids is not None:
             if path is not None and len(path) > 0:
-                grids = np.load(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../', path))
+                grids = np.load(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../', path))[0]
+                grids_seq = np.load(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../', path))
             else:
                 grids = np.array(grids)
+                raise ValueError('Invalid path')
             self.target_density.from_numpy(grids)
+            self.target_density_seq.from_numpy(grids_seq)
             self.update_target()
 
             self.grid_mass.from_numpy(grids)
@@ -143,7 +147,7 @@ class LossSeq:
     # compute density and sdf loss
     # -----------------------------------------------------------
     @ti.kernel
-    def compute_density_loss_kernel(self):
+    def compute_density_loss_kernel(self, step: ti.i32):
         for I in ti.grouped(self.grid_mass):
             self.density_loss[None] += ti.abs(self.grid_mass[I] - self.target_density[I])
 
@@ -184,7 +188,7 @@ class LossSeq:
         self.loss[None] = 0
 
     @ti.complex_kernel
-    def compute_loss_kernel(self, f):
+    def compute_loss_kernel(self, f, step):
         self.clear_losses()
         if not self.soft_contact_loss:
             for p in self.primitives:
@@ -194,21 +198,12 @@ class LossSeq:
         self.grid_mass.fill(0)
         self.compute_grid_mass(f)
 
-        self.compute_density_loss_kernel()
-        self.compute_sdf_loss_kernel()
-
-        if len(self.primitives) > 0:
-            if self.soft_contact_loss:
-                self.compute_contact_distance_normalize(f)
-                self.compute_soft_contact_distance_kernel(f)
-            else:
-                self.compute_contact_distance_kernel(f)
-            self.compute_contact_loss_kernel()
+        self.compute_density_loss_kernel(step)
 
         self.sum_up_loss_kernel()
 
     @ti.complex_kernel_grad(compute_loss_kernel)
-    def compute_loss_kernel_grad(self, f):
+    def compute_loss_kernel_grad(self, f, step):
         self.clear_losses()
         if not self.soft_contact_loss:
             for p in self.primitives:
@@ -216,24 +211,10 @@ class LossSeq:
 
         self.sum_up_loss_kernel.grad()
 
-        if len(self.primitives)>0:
-            if self.soft_contact_loss:
-                self.compute_contact_distance_normalize(f)
-                self.compute_soft_contact_distance_kernel(f)
-            else:
-                self.compute_contact_distance_kernel(f)
-            self.compute_contact_loss_kernel.grad()
-            if self.soft_contact_loss:
-                self.compute_soft_contact_distance_kernel.grad(f)
-                self.compute_contact_distance_normalize.grad(f)
-            else:
-                self.compute_contact_distance_kernel.grad(f)
-
         self.grid_mass.fill(0.)
         self.grid_mass.grad.fill(0.)
         self.compute_grid_mass(f) # get the grid mass tensor...
-        self.compute_sdf_loss_kernel.grad()
-        self.compute_density_loss_kernel.grad()
+        self.compute_density_loss_kernel.grad(step)
         self.compute_grid_mass.grad(f) # back to the particles..
 
     @ti.kernel
@@ -266,8 +247,8 @@ class LossSeq:
         # no grad
         pass
 
-    def _extract_loss(self, f):
-        self.compute_loss_kernel(f)
+    def _extract_loss(self, f, step):
+        self.compute_loss_kernel(f, step)
         self.iou()
         return {
             'loss': self.loss[None],
@@ -280,13 +261,13 @@ class LossSeq:
 
     def reset(self):
         self.clear_loss()
-        loss_info = self._extract_loss(0)
+        loss_info = self._extract_loss(0, 0)
         self._start_loss = loss_info['loss']
         self._init_iou = loss_info['iou']
         self._last_loss = 0 # in optim, loss will be clear after ti.Tape; for RL; we reset loss to zero in each step.
 
-    def compute_loss(self, f):
-        loss_info = self._extract_loss(f)
+    def compute_loss(self, f, step):
+        loss_info = self._extract_loss(f, step)
         r = self._start_loss - (loss_info['loss'] - self._last_loss)
         cur_step_loss = loss_info['loss'] - self._last_loss
         self._last_loss = loss_info['loss']
