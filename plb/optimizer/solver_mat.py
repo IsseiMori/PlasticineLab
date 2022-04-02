@@ -21,20 +21,28 @@ class Solver:
 
     def solve(self, init_actions=None, callbacks=()):
         env = self.env
-        if init_actions is None:
-            init_actions = self.init_actions(env, self.cfg)
+
+        # initialize material parameters; YS, E, nu
+        material_params = np.array([0.5, 0.5, 0.5])
+
+        init_actions = self.init_actions(env, self.cfg)
+
         # initialize ...
-        optim = OPTIMS[self.optim_cfg.type](init_actions, self.optim_cfg)
+        # optim = OPTIMS[self.optim_cfg.type](init_actions, self.optim_cfg)
+        optim = OPTIMS[self.optim_cfg.type](material_params, self.optim_cfg)
+
+
         # set softness ..
         env_state = env.get_state()
         self.total_steps = 0
 
-        def forward(sim_state, action):
+        def forward(sim_state, action, material):
             if self.logger is not None:
                 self.logger.reset()
 
             env.set_state(sim_state, self.cfg.softness, False)
             with ti.Tape(loss=env.loss.loss):
+                env.simulator.set_material(material)
                 for i in range(len(action)):
                     env.step(action[i])
                     self.total_steps += 1
@@ -42,24 +50,34 @@ class Solver:
                     if self.logger is not None:
                         self.logger.step(None, None, loss_info['reward'], None, i==len(action)-1, loss_info)
             loss = env.loss.loss[None]
-            return loss, env.primitives.get_grad(len(action))
+            # return loss, env.primitives.get_grad(len(action))
+            return loss, env.simulator.get_grad()
 
-        best_action = None
+        # best_action = None
+        best_material = None
         best_loss = 1e10
 
         actions = init_actions
+        mat = material_params
         for iter in range(self.cfg.n_iters):
-            self.params = actions.copy()
-            loss, grad = forward(env_state['state'], actions)
+            # self.params = actions.copy() # no doing anything
+            self.params = mat.copy() # no doing anything
+            loss, grad = forward(env_state['state'], actions, mat)
+            print('material_params', mat)
+            print('env.simulator', env.simulator.yield_stress)
+            print('grad', grad)
+            print('loss ', loss)
             if loss < best_loss:
                 best_loss = loss
-                best_action = actions.copy()
-            actions = optim.step(grad)
+                # best_action = actions.copy()
+                best_material = mat.copy()
+            # actions = optim.step(grad)
+            mat = optim.step(grad)
             for callback in callbacks:
                 callback(self, optim, loss, grad)
 
         env.set_state(**env_state)
-        return best_action
+        return best_material
 
 
     @staticmethod
@@ -76,6 +94,8 @@ class Solver:
         actions = states['shape_states'][0]
         actions = (states['shape_states'][0, 1:, :, 0:3] - states['shape_states'][0, 0:-1, :, 0:3]) * 100
         actions = actions.reshape(actions.shape[0], -1)
+
+        print((states['YS'] - 5)/195, " ", (states['E']-100)/2900, " ", states['nu']/0.45)
 
         return actions
 

@@ -26,9 +26,9 @@ class MPMSimulator:
         # material
         E, nu = cfg.E, cfg.nu
         self._mu, self._lam = E / (2 * (1 + nu)), E * nu / ((1 + nu) * (1 - 2 * nu))  # Lame parameters
-        self.mu = ti.field(dtype=dtype, shape=(n_particles,), needs_grad=False)
-        self.lam = ti.field(dtype=dtype, shape=(n_particles,), needs_grad=False)
-        self.yield_stress = ti.field(dtype=dtype, shape=(n_particles,), needs_grad=False)
+        self.mu = ti.field(dtype=dtype, shape=(n_particles,), needs_grad=True)
+        self.lam = ti.field(dtype=dtype, shape=(n_particles,), needs_grad=True)
+        self.yield_stress = ti.field(dtype=dtype, shape=(n_particles,), needs_grad=True)
 
         max_steps = self.max_steps = cfg.max_steps
         self.substeps = int(2e-3 // self.dt)
@@ -50,11 +50,59 @@ class MPMSimulator:
         self.gravity = ti.Vector.field(dim, dtype=dtype, shape=()) # gravity ...
         self.primitives = primitives
 
+        self.material = ti.field(dtype=dtype, needs_grad=True, shape=(3,)) # material vector field for auto grad
+
     def initialize(self):
         self.gravity[None] = self.default_gravity
         self.yield_stress.fill(self._yield_stress)
         self.mu.fill(self._mu)
         self.lam.fill(self._lam)
+    
+    # ------------------------------- Material part ---------------------------------
+
+    @ti.kernel
+    def set_material_kernel(self, material: ti.ext_arr()):
+        # for i in range(3):
+        #     self.material[i] = material[i]
+        self.material[0] = 5 + material[0] * 195
+        self.material[1] = 100 + material[1] * 2900
+        self.material[2] = 0 + material[2] * 0.45
+
+    
+    @ti.complex_kernel
+    def no_grad_set_material_kernel(self, material):
+        self.set_material_kernel(material)
+    @ti.complex_kernel_grad(no_grad_set_material_kernel)
+    def no_grad_set_material_kernel_grad(self, material):
+        return
+    
+    @ti.kernel
+    def set_material_params_kernel(self):
+        for p in range(0, self.n_particles):
+            yield_stress = self.material[0]
+            E = self.material[1]
+            nu = self.material[2]
+
+            mu = E / (2 * (1 + nu))
+            lam = E * nu / ((1 + nu) * (1 - 2 * nu))  # Lame parameters
+
+            self.yield_stress[p] = yield_stress
+            self.mu[p] = mu
+            self.lam[p] = lam
+
+    def set_material(self, material):
+        self.no_grad_set_material_kernel(material) #HACK: taichi can't compute gradient to this.
+        self.set_material_params_kernel()
+    
+    @ti.kernel
+    def get_material_grad_kernel(self, grad: ti.ext_arr()):
+        for i in range(3):
+            grad[i] = self.material.grad[i]
+    
+    def get_grad(self):
+        grad = np.zeros(3, dtype=np.float64)
+        self.get_material_grad_kernel(grad)
+        return grad
 
     # --------------------------------- MPM part -----------------------------------
     @ti.kernel
