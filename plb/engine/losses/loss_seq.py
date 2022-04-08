@@ -148,8 +148,12 @@ class LossSeq:
     # -----------------------------------------------------------
     @ti.kernel
     def compute_density_loss_kernel(self, step: ti.i32):
+        # for i in range(64):
+        #     self.density_loss[None] += ti.abs(self.grid_mass[i,i,i] - self.target_density_seq[step, i, i, i])
+
         for I in ti.grouped(self.grid_mass):
-            self.density_loss[None] += ti.abs(self.grid_mass[I] - self.target_density[I])
+            # self.density_loss[None] += ti.abs(self.grid_mass[I] - self.target_density[I])
+            self.density_loss[None] += ti.abs(self.grid_mass[I] - self.target_density_seq[step, I])
 
     @ti.kernel
     def compute_sdf_loss_kernel(self):
@@ -248,6 +252,7 @@ class LossSeq:
         pass
 
     def _extract_loss(self, f, step):
+        print("shape", self.target_density_seq.shape)
         self.compute_loss_kernel(f, step)
         self.iou()
         return {

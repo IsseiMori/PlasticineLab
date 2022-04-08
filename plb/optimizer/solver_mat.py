@@ -12,7 +12,7 @@ OPTIMS = {
     'Momentum': Momentum
 }
 
-class Solver:
+class SolverMat:
     def __init__(self, env: TaichiEnv, logger=None, cfg=None, **kwargs):
         self.cfg = make_cls_config(self, cfg, **kwargs)
         self.optim_cfg = self.cfg.optim
@@ -23,7 +23,7 @@ class Solver:
         env = self.env
 
         # initialize material parameters; YS, E, nu
-        material_params = np.array([0.5, 0.5, 0.5])
+        material_params = np.array([0.75, 0.25, 0.75])
 
         init_actions = self.init_actions(env, self.cfg)
 
@@ -64,7 +64,6 @@ class Solver:
             self.params = mat.copy() # not doing anything
             loss, grad = forward(env_state['state'], actions, mat)
             print('material_params', mat)
-            print('env.simulator', env.simulator.yield_stress)
             print('grad', grad)
             print('loss ', loss)
             if loss < best_loss:
@@ -77,7 +76,7 @@ class Solver:
                 callback(self, optim, loss, grad)
 
         env.set_state(**env_state)
-        return best_material
+        return best_material, actions
 
 
     @staticmethod
@@ -122,13 +121,14 @@ def solve_mat(env, path, logger, args):
 
 
 
-    solver = Solver(taichi_env, logger, None,
+    solver = SolverMat(taichi_env, logger, None,
                     n_iters=(args.num_steps + T-1)//T, softness=args.softness, horizon=T,
                     **{"optim.lr": args.lr, "optim.type": args.optim, "init_range": 0.0001})
 
-    action = solver.solve()
+    mat, actions = solver.solve()
+    taichi_env.simulator.set_material(mat)
 
-    for idx, act in enumerate(action):
-        env.step(act)
+    for idx, act in enumerate(actions):
+        env.step(act, idx)
         img = env.render(mode='rgb_array')
         cv2.imwrite(f"{path}/{idx:04d}.png", img[..., ::-1])

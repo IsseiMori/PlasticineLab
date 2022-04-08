@@ -25,7 +25,7 @@ class Optimizer:
     def default_config(cls):
         cfg = CN()
         cfg.lr = 0.1
-        cfg.bounds = (-1., 1.)
+        cfg.bounds = (0., 1.)
         cfg.type = ''
         return cfg
 
