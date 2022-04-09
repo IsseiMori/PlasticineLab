@@ -148,12 +148,8 @@ class LossSeq:
     # -----------------------------------------------------------
     @ti.kernel
     def compute_density_loss_kernel(self, step: ti.i32):
-        # for i in range(64):
-        #     self.density_loss[None] += ti.abs(self.grid_mass[i,i,i] - self.target_density_seq[step, i, i, i])
-
         for I in ti.grouped(self.grid_mass):
-            # self.density_loss[None] += ti.abs(self.grid_mass[I] - self.target_density[I])
-            self.density_loss[None] += ti.abs(self.grid_mass[I] - self.target_density_seq[step, I])
+            self.density_loss[None] += ti.abs(self.grid_mass[I] - self.target_density_seq[step+1, I])
 
     @ti.kernel
     def compute_sdf_loss_kernel(self):
@@ -203,8 +199,20 @@ class LossSeq:
         self.compute_grid_mass(f)
 
         self.compute_density_loss_kernel(step)
-
         self.sum_up_loss_kernel()
+
+        # self.compute_density_loss_kernel(step)
+        # self.compute_sdf_loss_kernel()
+
+        # if len(self.primitives) > 0:
+        #     if self.soft_contact_loss:
+        #         self.compute_contact_distance_normalize(f)
+        #         self.compute_soft_contact_distance_kernel(f)
+        #     else:
+        #         self.compute_contact_distance_kernel(f)
+        #     self.compute_contact_loss_kernel()
+
+        # self.sum_up_loss_kernel()
 
     @ti.complex_kernel_grad(compute_loss_kernel)
     def compute_loss_kernel_grad(self, f, step):
@@ -220,6 +228,26 @@ class LossSeq:
         self.compute_grid_mass(f) # get the grid mass tensor...
         self.compute_density_loss_kernel.grad(step)
         self.compute_grid_mass.grad(f) # back to the particles..
+
+        # if len(self.primitives)>0:
+        #     if self.soft_contact_loss:
+        #         self.compute_contact_distance_normalize(f)
+        #         self.compute_soft_contact_distance_kernel(f)
+        #     else:
+        #         self.compute_contact_distance_kernel(f)
+        #     self.compute_contact_loss_kernel.grad()
+        #     if self.soft_contact_loss:
+        #         self.compute_soft_contact_distance_kernel.grad(f)
+        #         self.compute_contact_distance_normalize.grad(f)
+        #     else:
+        #         self.compute_contact_distance_kernel.grad(f)
+
+        # self.grid_mass.fill(0.)
+        # self.grid_mass.grad.fill(0.)
+        # self.compute_grid_mass(f) # get the grid mass tensor...
+        # self.compute_sdf_loss_kernel.grad()
+        # self.compute_density_loss_kernel.grad(step)
+        # self.compute_grid_mass.grad(f) # back to the particles..
 
     @ti.kernel
     def iou_kernel(self)->ti.float64:
@@ -252,9 +280,13 @@ class LossSeq:
         pass
 
     def _extract_loss(self, f, step):
-        print("shape", self.target_density_seq.shape)
         self.compute_loss_kernel(f, step)
         self.iou()
+        # print(step)
+        # print('loss', self.loss[None])
+        # print('density_loss', self.density_loss[None])
+        # print('self.grid_mass', self.grid_mass[32, 4, 32])
+        # print('target_density_seq', self.target_density_seq[step+1, 32, 4, 32])
         return {
             'loss': self.loss[None],
             'contact_loss': self.contact_loss[None],

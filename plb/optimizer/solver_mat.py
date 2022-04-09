@@ -23,7 +23,8 @@ class SolverMat:
         env = self.env
 
         # initialize material parameters; YS, E, nu
-        material_params = np.array([0.75, 0.25, 0.75])
+        # material_params = np.array([0.75, 0.25, 0.75])
+        material_params = np.array([0.0, 1.0, 0.0])
 
         init_actions = self.init_actions(env, self.cfg)
 
@@ -43,10 +44,12 @@ class SolverMat:
             env.set_state(sim_state, self.cfg.softness, False)
             with ti.Tape(loss=env.loss.loss):
                 env.simulator.set_material(material)
-                for i in range(len(action)):
+                for i in range(len(action)-1):
+                    # print(action[i])
                     env.step(action[i])
                     self.total_steps += 1
                     loss_info = env.compute_loss_seq(i)
+                    # loss_info = env.compute_loss()
                     if self.logger is not None:
                         self.logger.step(None, None, loss_info['reward'], None, i==len(action)-1, loss_info)
             loss = env.loss.loss[None]
@@ -56,6 +59,12 @@ class SolverMat:
         # best_action = None
         best_material = None
         best_loss = 1e10
+
+        steps = []
+        ct0_vals = []
+        ct1_vals = []
+        ct2_vals = []
+        loss_vals = []
 
         actions = init_actions
         mat = material_params
@@ -74,13 +83,59 @@ class SolverMat:
             mat = optim.step(grad)
             for callback in callbacks:
                 callback(self, optim, loss, grad)
+            
+            steps.append(iter)
+            ct0_vals.append(mat[0])
+            ct1_vals.append(mat[1])
+            ct2_vals.append(mat[2])
+            loss_vals.append(loss)
+        
+        import matplotlib.pyplot as plt
+
+        xpoints = np.array(steps)
+        ypoints = np.array(ct0_vals)
+
+        plt.plot(xpoints, ypoints)
+        plt.title('Optimizing YS value')
+        plt.xlabel('steps')
+        plt.ylabel('YS')
+        plt.savefig('output/ct0.png')
+        plt.clf()
+
+        xpoints = np.array(steps)
+        ypoints = np.array(ct1_vals)
+
+        plt.plot(xpoints, ypoints)
+        plt.title('Optimizing E value')
+        plt.xlabel('steps')
+        plt.ylabel('E')
+        plt.savefig('output/ct1.png')
+        plt.clf()
+
+        xpoints = np.array(steps)
+        ypoints = np.array(ct2_vals)
+
+        plt.plot(xpoints, ypoints)
+        plt.title('Optimizing nu value')
+        plt.xlabel('steps')
+        plt.ylabel('nu')
+        plt.savefig('output/ct2.png')
+        plt.clf()
+
+        xpoints = np.array(steps)
+        ypoints = np.array(loss_vals)
+
+        plt.plot(xpoints, ypoints)
+        plt.title('Loss while optimization')
+        plt.xlabel('steps')
+        plt.ylabel('Loss')
+        plt.savefig("output/loss.png")
 
         env.set_state(**env_state)
         return best_material, actions
 
 
-    @staticmethod
-    def init_actions(env, cfg):
+    def init_actions(self, env, cfg):
         action_dim = env.primitives.action_dim
         horizon = cfg.horizon
         # if cfg.init_sampler == 'uniform':
@@ -94,7 +149,26 @@ class SolverMat:
         actions = (states['shape_states'][0, 1:, :, 0:3] - states['shape_states'][0, 0:-1, :, 0:3]) * 100
         actions = actions.reshape(actions.shape[0], -1)
 
-        print((states['YS'] - 5)/195, " ", (states['E']-100)/2900, " ", states['nu']/0.45)
+        print("target materila", (states['YS'] - 5)/195, " ", (states['E']-100)/2900, " ", states['nu']/0.45)
+
+        state = self.env.get_state()
+
+        # x, v, F, C, p1, p2, p3 = state['state']
+        states_xvfcp = state['state']
+        n_grips = states['shape_states'].shape[2]
+
+        shape_states_ = states['shape_states'][0][0]
+    
+        for i_grip in range(n_grips):
+            states_xvfcp[4+i_grip][:3] = shape_states_[i_grip][0:3]
+            states_xvfcp[4+i_grip][3:] = shape_states_[i_grip][6:10]
+
+        new_state = {
+            'state': states_xvfcp,
+            'is_copy': state['is_copy'],
+            'softness': state['softness'],
+        }
+        env.set_state(**new_state)
 
         return actions
 
@@ -104,7 +178,7 @@ class SolverMat:
         cfg.optim = Optimizer.default_config()
         cfg.n_iters = 100
         cfg.softness = 666.
-        cfg.horizon = 39
+        cfg.horizon = 38
 
         cfg.init_range = 0.
         cfg.init_sampler = 'uniform'
@@ -116,7 +190,7 @@ def solve_mat(env, path, logger, args):
     os.makedirs(path, exist_ok=True)
     env.reset()
     taichi_env: TaichiEnv = env.unwrapped.taichi_env
-    env._max_episode_steps = 39 # overwrite frame count
+    env._max_episode_steps = 38 # overwrite frame count
     T = env._max_episode_steps
 
 
@@ -129,6 +203,6 @@ def solve_mat(env, path, logger, args):
     taichi_env.simulator.set_material(mat)
 
     for idx, act in enumerate(actions):
-        env.step(act, idx)
+        env.step(act)
         img = env.render(mode='rgb_array')
         cv2.imwrite(f"{path}/{idx:04d}.png", img[..., ::-1])
