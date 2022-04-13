@@ -70,9 +70,13 @@ class RunSimulation(torch.autograd.Function):
 
             env.simulator.step_kernel_grad(action[s])
 
-        params = env.simulator.material.to_torch()
+    
+        mat_grad = torch.empty(3)
+        for i in range(3):
+            mat_grad[i] = env.simulator.material.grad[i]
+        # params_grad = env.simulator.material.grad.to_torch()
 
-        return params, None, None
+        return mat_grad, None, None
 
 class SolverMatChamfer:
     def __init__(self, env: TaichiEnv, logger=None, cfg=None, **kwargs):
@@ -112,11 +116,8 @@ class SolverMatChamfer:
             env.set_state(sim_state, self.cfg.softness, False)
             
             p_pos_seq = RunSimulation.apply(material, env, action)
-            print("ppos")
-            print(p_pos_seq.shape)
-            print(ppos_seq_target.shape)
             
-            loss = ((ppos_seq_target - p_pos_seq)**2).mean()
+            loss = ((ppos_seq_target - p_pos_seq)**2).sum()
 
             return loss
 
@@ -129,6 +130,7 @@ class SolverMatChamfer:
             # self.params = actions.copy() # not doing anything
             loss = forward(env_state['state'], actions, material_params, ppos_seq_target)
             print('material_params', material_params)
+            print('material_params grad', material_params.grad)
             print('loss ', loss)
             if loss < best_loss:
                 best_loss = loss
@@ -136,7 +138,6 @@ class SolverMatChamfer:
             
             optimizer.zero_grad()
             loss.backward(retain_graph=True)
-            print(material_params)
             optimizer.step()
     
 
