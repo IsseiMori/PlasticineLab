@@ -422,6 +422,31 @@ class MPMSimulator:
         if is_copy:
             self.copyframe(self.cur, 0) # copy to the first frame for simulation
             self.cur = 0
+    
+    @ti.complex_kernel
+    def step_kernel(self, action):
+        # assume is_copy = True
+        start = 0
+        self.cur = start + self.substeps
+
+        if action is not None:
+            self.primitives.set_action(start//self.substeps, self.substeps, action)
+        
+        for s in range(start, self.cur):
+            self.substep(s)
+        
+        self.copyframe(self.cur, 0) # copy to the first frame for simulation
+        self.cur = 0
+        
+    @ti.complex_kernel_grad(step_kernel)
+    def step_kernel_grad(self, action):
+
+        start = 0
+        self.cur = start + self.substeps
+
+        for s in reversed(range(start, self.cur)):
+            self.substep_grad(s)
+
 
 
     # ------------------------------------------------------------------

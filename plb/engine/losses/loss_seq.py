@@ -49,6 +49,7 @@ class LossSeq:
             if path is not None and len(path) > 0:
                 grids = np.load(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../', path))[0]
                 grids_seq = np.load(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../', path))
+                print(grids_seq.shape)
             else:
                 grids = np.array(grids)
                 raise ValueError('Invalid path')

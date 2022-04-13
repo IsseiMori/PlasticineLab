@@ -25,6 +25,7 @@ class SolverMat:
         # initialize material parameters; YS, E, nu
         # material_params = np.array([0.75, 0.25, 0.75])
         material_params = np.array([0.0, 1.0, 0.0])
+        # material_params = np.array([0.77325849, 0.18308478, 0.79226988])
 
         init_actions = self.init_actions(env, self.cfg)
 
@@ -57,7 +58,7 @@ class SolverMat:
             return loss, env.simulator.get_grad()
 
         # best_action = None
-        best_material = None
+        best_material = material_params
         best_loss = 1e10
 
         steps = []
@@ -90,46 +91,46 @@ class SolverMat:
             ct2_vals.append(mat[2])
             loss_vals.append(loss)
         
-        import matplotlib.pyplot as plt
+        # import matplotlib.pyplot as plt
 
-        xpoints = np.array(steps)
-        ypoints = np.array(ct0_vals)
+        # xpoints = np.array(steps)
+        # ypoints = np.array(ct0_vals)
 
-        plt.plot(xpoints, ypoints)
-        plt.title('Optimizing YS value')
-        plt.xlabel('steps')
-        plt.ylabel('YS')
-        plt.savefig('output/ct0.png')
-        plt.clf()
+        # plt.plot(xpoints, ypoints)
+        # plt.title('Optimizing YS value')
+        # plt.xlabel('steps')
+        # plt.ylabel('YS')
+        # plt.savefig('output/ct0.png')
+        # plt.clf()
 
-        xpoints = np.array(steps)
-        ypoints = np.array(ct1_vals)
+        # xpoints = np.array(steps)
+        # ypoints = np.array(ct1_vals)
 
-        plt.plot(xpoints, ypoints)
-        plt.title('Optimizing E value')
-        plt.xlabel('steps')
-        plt.ylabel('E')
-        plt.savefig('output/ct1.png')
-        plt.clf()
+        # plt.plot(xpoints, ypoints)
+        # plt.title('Optimizing E value')
+        # plt.xlabel('steps')
+        # plt.ylabel('E')
+        # plt.savefig('output/ct1.png')
+        # plt.clf()
 
-        xpoints = np.array(steps)
-        ypoints = np.array(ct2_vals)
+        # xpoints = np.array(steps)
+        # ypoints = np.array(ct2_vals)
 
-        plt.plot(xpoints, ypoints)
-        plt.title('Optimizing nu value')
-        plt.xlabel('steps')
-        plt.ylabel('nu')
-        plt.savefig('output/ct2.png')
-        plt.clf()
+        # plt.plot(xpoints, ypoints)
+        # plt.title('Optimizing nu value')
+        # plt.xlabel('steps')
+        # plt.ylabel('nu')
+        # plt.savefig('output/ct2.png')
+        # plt.clf()
 
-        xpoints = np.array(steps)
-        ypoints = np.array(loss_vals)
+        # xpoints = np.array(steps)
+        # ypoints = np.array(loss_vals)
 
-        plt.plot(xpoints, ypoints)
-        plt.title('Loss while optimization')
-        plt.xlabel('steps')
-        plt.ylabel('Loss')
-        plt.savefig("output/loss.png")
+        # plt.plot(xpoints, ypoints)
+        # plt.title('Loss while optimization')
+        # plt.xlabel('steps')
+        # plt.ylabel('Loss')
+        # plt.savefig("output/loss.png")
 
         env.set_state(**env_state)
         return best_material, actions
@@ -184,6 +185,14 @@ class SolverMat:
         cfg.init_sampler = 'uniform'
         return cfg
 
+def animate(imgs, filename='animation.webm', _return=True, fps=60):
+    print(f'animating {filename}')
+    from moviepy.editor import ImageSequenceClip
+    imgs = ImageSequenceClip(imgs, fps=fps)
+    imgs.write_videofile(filename, fps=fps)
+    if _return:
+        from IPython.display import Video
+        return Video(filename, embed=True)
 
 def solve_mat(env, path, logger, args):
     import os, cv2
@@ -202,7 +211,12 @@ def solve_mat(env, path, logger, args):
     mat, actions = solver.solve()
     taichi_env.simulator.set_material(mat)
 
+    images = []
+
     for idx, act in enumerate(actions):
         env.step(act)
-        img = env.render(mode='rgb_array')
-        cv2.imwrite(f"{path}/{idx:04d}.png", img[..., ::-1])
+        images.append(env.render('rgb_array'))
+        # img = env.render(mode='rgb_array')
+        # cv2.imwrite(f"{path}/{idx:04d}.png", img[..., ::-1])
+
+    animate(images)

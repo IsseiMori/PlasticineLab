@@ -12,6 +12,7 @@ from plb.algorithms.TD3.run_td3 import train_td3
 from plb.optimizer.solver import solve_action
 from plb.optimizer.solver_nn import solve_nn
 from plb.optimizer.solver_mat import solve_mat
+from plb.optimizer.solver_mat_chamfer import solve_mat_chamfer
 
 RL_ALGOS = ['sac', 'td3', 'ppo']
 DIFF_ALGOS = ['action', 'nn']
@@ -72,6 +73,8 @@ def main():
         solve_nn(env, args.path, logger, args)
     elif args.algo == 'mat':
         solve_mat(env, args.path, logger, args)
+    elif args.algo == 'chamfer':
+        solve_mat_chamfer(env, args.path, logger, args)
     else:
         raise NotImplementedError
 
