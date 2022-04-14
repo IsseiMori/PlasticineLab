@@ -22,29 +22,37 @@ class RunSimulation(torch.autograd.Function):
         ctx.params = params
         ctx.action = action
 
+        print('params', params)
+
         # Set material parameters in Taichi
-        rescaled_params = params.clone()
+        rescaled_params = torch.tensor(params, requires_grad=True)
         rescaled_params[0] = 5 + rescaled_params[0] * 195
         rescaled_params[1] = 100 + rescaled_params[1] * 2900
         rescaled_params[2] = 0 + rescaled_params[2] * 0.45
         env.simulator.material.from_torch(rescaled_params)
+
+        print('rescaled_params ', rescaled_params)
+        print('simulator material ', env.simulator.material)
         
         env.simulator.set_material_params_kernel()
 
-        # positions = torch.tensor(, requires_grad=True)
-        p_pos_seq = torch.empty(len(action)-1, 5000, 3)
+        ti_positions = ti.field(dtype=ti.f32, shape=(len(action)-1, 5000, 3), needs_grad=True)
+        ctx.ti_positions = ti_positions
 
         for s in range(len(action)-1):
             env.simulator.step_kernel(action[s])
 
             for i in range(env.simulator.n_particles):
                 for j in ti.static(range(env.simulator.dim)):
-                    p_pos_seq[s, i, j] = env.simulator.x[0, i][j]
+                    ti_positions[s, i, j] = env.simulator.x[18, i][j]
 
 
-        # p_pos_seq = env.simulator.x.to_torch()
+        p_pos_seq = ti_positions.to_torch()
+
+        # env.simulator.compute_grid_m_kernel(19)
 
         return p_pos_seq
+        # return env.simulator.grid_m.to_torch()
 
 
     @staticmethod
@@ -55,25 +63,49 @@ class RunSimulation(torch.autograd.Function):
         env = ctx.env
         params = ctx.params
         action = ctx.action
+        ti_positions = ctx.ti_positions
 
-        # env.simulator.x.grad.from_torch(grad_output)
+        ti_positions.grad.from_torch(grad_output)
 
-        grad = ti.field(dtype=ti.f32, shape=(len(action)-1, 5000, 3))
-        grad.from_torch(grad_output)
+        # env.simulator.compute_grid_m_kernel(19)
+        # env.simulator.grid_m.grad.from_torch(grad_output)
+        # env.simulator.compute_grid_m_kernel.grad(19)
+
+        # print('ti_positions.grad', ti_positions.grad)
+        # print('env.simulator.grid_m.grad[31, 2, 28]', env.simulator.grid_m.grad[31, 2, 28])
 
         for s in reversed(range(len(action)-1)):
             
             for i in range(env.simulator.n_particles):
                 for j in ti.static(range(3)):
-                    env.simulator.x.grad[0, i][j] = grad[s, i, j]
-            
+                    env.simulator.x.grad[18, i][j] = ti_positions.grad[s, i, j]
 
             env.simulator.step_kernel_grad(action[s])
 
+        
+
+
+        # print('env.simulator.grid_m.grad[31, 2, 28]', env.simulator.grid_m.grad[31, 2, 28])
+        
+        # print('env.simulator.x.grad', env.simulator.x.grad)
+        mu = env.simulator.mu.grad.to_torch()
+        print('mu grad', env.simulator.mu.grad)
+        print('ys grad', env.simulator.yield_stress.grad)
+        print('mu max', mu.max(), mu.min())
+
+        # print('env.simulator.grid_m.grad[31, 2, 28]', env.simulator.grid_m.grad[31, 2, 28])
+
+        x = env.simulator.x.grad.to_torch()
+        print('x max', x.max(), x.min())
+
+
+        env.simulator.set_material_params_kernel.grad()
+        
     
         mat_grad = torch.empty(3)
         for i in range(3):
             mat_grad[i] = env.simulator.material.grad[i]
+            print('mat grad i ', env.simulator.material.grad[i])
         # params_grad = env.simulator.material.grad.to_torch()
 
         return mat_grad, None, None
@@ -92,9 +124,12 @@ class SolverMatChamfer:
         material_params = torch.tensor([0.5, 0.5, 0.5], requires_grad=True)
         optimizer = torch.optim.Adam([material_params], lr=0.05)
 
+        print('material_params', material_params)
+
         init_actions = self.init_actions(env, self.cfg)
 
         ppos_seq_target = np.load(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../', env.cfg.loss.ppos_path))
+        # ppos_seq_target = np.load(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../', env.cfg.loss.target_path))
         ppos_seq_target = ppos_seq_target[1:-1] # remove initial state
         ppos_seq_target = torch.tensor(ppos_seq_target)
         print(ppos_seq_target.shape)
