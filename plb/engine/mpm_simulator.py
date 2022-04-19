@@ -435,18 +435,15 @@ class MPMSimulator:
         for s in range(start, self.cur):
             self.substep(s)
         
-        # self.copyframe(self.cur, 0) # copy to the first frame for simulation
+        self.copyframe(self.cur, 0) # copy to the first frame for simulation
         self.cur = 0
         
     @ti.complex_kernel_grad(step_kernel)
     def step_kernel_grad(self, action):
 
-        start = 0
+        start = 1
         self.cur = start + self.substeps
 
-        # self.copyframe.grad(self.cur, 0)
-
-        print('substeps', self.cur)
         for s in reversed(range(start, self.cur)):
             self.substep_grad(s)
         

@@ -22,37 +22,38 @@ class RunSimulation(torch.autograd.Function):
         ctx.params = params
         ctx.action = action
 
-        print('params', params)
-
         # Set material parameters in Taichi
-        rescaled_params = torch.tensor(params, requires_grad=True)
+        # rescaled_params = torch.tensor(params, requires_grad=True)
+        rescaled_params = params.clone().detach().requires_grad_(True)
         rescaled_params[0] = 5 + rescaled_params[0] * 195
         rescaled_params[1] = 100 + rescaled_params[1] * 2900
         rescaled_params[2] = 0 + rescaled_params[2] * 0.45
         env.simulator.material.from_torch(rescaled_params)
 
-        print('rescaled_params ', rescaled_params)
-        print('simulator material ', env.simulator.material)
-        
         env.simulator.set_material_params_kernel()
 
-        ti_positions = ti.field(dtype=ti.f32, shape=(len(action)-1, 5000, 3), needs_grad=True)
-        ctx.ti_positions = ti_positions
+        # ti_positions = ti.field(dtype=ti.f32, shape=(len(action)-1, 5000, 3), needs_grad=True)
+        ti_positions = ti.field(dtype=ti.f32, shape=(5000, 3), needs_grad=True)
 
         for s in range(len(action)-1):
             env.simulator.step_kernel(action[s])
 
-            for i in range(env.simulator.n_particles):
+            # for i in range(env.simulator.n_particles):
+            #     for j in ti.static(range(env.simulator.dim)):
+            #         ti_positions[s, i, j] = env.simulator.x[19, i][j]
+        
+        for i in range(env.simulator.n_particles):
                 for j in ti.static(range(env.simulator.dim)):
-                    ti_positions[s, i, j] = env.simulator.x[18, i][j]
-
+                    ti_positions[i, j] = env.simulator.x[19, i][j]
+        
+        ctx.ti_positions = ti_positions
 
         p_pos_seq = ti_positions.to_torch()
 
         # env.simulator.compute_grid_m_kernel(19)
 
-        return p_pos_seq
-        # return env.simulator.grid_m.to_torch()
+        # return p_pos_seq
+        return env.simulator.grid_m.to_torch()
 
 
     @staticmethod
@@ -65,39 +66,20 @@ class RunSimulation(torch.autograd.Function):
         action = ctx.action
         ti_positions = ctx.ti_positions
 
-        ti_positions.grad.from_torch(grad_output)
+        # ti_positions.grad.from_torch(grad_output)
+        env.simulator.grid_m.grad.from_torch(grad_output)
 
-        # env.simulator.compute_grid_m_kernel(19)
-        # env.simulator.grid_m.grad.from_torch(grad_output)
-        # env.simulator.compute_grid_m_kernel.grad(19)
-
-        # print('ti_positions.grad', ti_positions.grad)
-        # print('env.simulator.grid_m.grad[31, 2, 28]', env.simulator.grid_m.grad[31, 2, 28])
+        for i in range(env.simulator.n_particles):
+                for j in ti.static(range(3)):
+                    env.simulator.x.grad[19, i][j] = ti_positions.grad[i, j]
 
         for s in reversed(range(len(action)-1)):
             
-            for i in range(env.simulator.n_particles):
-                for j in ti.static(range(3)):
-                    env.simulator.x.grad[18, i][j] = ti_positions.grad[s, i, j]
+            # for i in range(env.simulator.n_particles):
+            #     for j in ti.static(range(3)):
+            #         env.simulator.x.grad[19, i][j] = ti_positions.grad[s, i, j]
 
             env.simulator.step_kernel_grad(action[s])
-
-        
-
-
-        # print('env.simulator.grid_m.grad[31, 2, 28]', env.simulator.grid_m.grad[31, 2, 28])
-        
-        # print('env.simulator.x.grad', env.simulator.x.grad)
-        mu = env.simulator.mu.grad.to_torch()
-        print('mu grad', env.simulator.mu.grad)
-        print('ys grad', env.simulator.yield_stress.grad)
-        print('mu max', mu.max(), mu.min())
-
-        # print('env.simulator.grid_m.grad[31, 2, 28]', env.simulator.grid_m.grad[31, 2, 28])
-
-        x = env.simulator.x.grad.to_torch()
-        print('x max', x.max(), x.min())
-
 
         env.simulator.set_material_params_kernel.grad()
         
@@ -105,7 +87,7 @@ class RunSimulation(torch.autograd.Function):
         mat_grad = torch.empty(3)
         for i in range(3):
             mat_grad[i] = env.simulator.material.grad[i]
-            print('mat grad i ', env.simulator.material.grad[i])
+            # print('mat grad i ', env.simulator.material.grad[i])
         # params_grad = env.simulator.material.grad.to_torch()
 
         return mat_grad, None, None
@@ -121,10 +103,17 @@ class SolverMatChamfer:
         env = self.env
 
         # initialize material parameters; YS, E, nu
-        material_params = torch.tensor([0.5, 0.5, 0.5], requires_grad=True)
-        optimizer = torch.optim.Adam([material_params], lr=0.05)
+        # material_params = torch.tensor([0.75, 0.25, 0.75], requires_grad=True)
+        m_YS = torch.tensor(0.75, requires_grad=True)
+        m_E = torch.tensor(0.5, requires_grad=True)
+        m_nu = torch.tensor(0.75, requires_grad=True)
+        # material_params = torch.tensor([0.5, 0.5, 0.5], requires_grad=True)
+        # optimizer = torch.optim.Adam([material_params], lr=0.05)
+        # optimizer = torch.optim.SGD([material_params], lr=0.00001, momentum=0.9)
+        optimizer = torch.optim.SGD([m_E], lr=0.00001, momentum=0.9)
 
-        print('material_params', material_params)
+
+        # print('material_params', material_params)
 
         init_actions = self.init_actions(env, self.cfg)
 
@@ -132,8 +121,6 @@ class SolverMatChamfer:
         # ppos_seq_target = np.load(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../', env.cfg.loss.target_path))
         ppos_seq_target = ppos_seq_target[1:-1] # remove initial state
         ppos_seq_target = torch.tensor(ppos_seq_target)
-        print(ppos_seq_target.shape)
-        print(init_actions.shape)
 
         # initialize ...
         # optim = OPTIMS[self.optim_cfg.type](init_actions, self.optim_cfg)
@@ -151,8 +138,16 @@ class SolverMatChamfer:
             env.set_state(sim_state, self.cfg.softness, False)
             
             p_pos_seq = RunSimulation.apply(material, env, action)
+
+            # with open('p_pos_seq.npy', 'wb') as f:
+            #     np.save(f, p_pos_seq.detach().numpy())
+            # with open('ppos_seq_target.npy', 'wb') as f:
+            #     np.save(f, ppos_seq_target.detach().numpy())
             
-            loss = ((ppos_seq_target - p_pos_seq)**2).sum()
+            loss = ((ppos_seq_target[-1] - p_pos_seq)**2).mean()
+
+            # lo = (ppos_seq_target - p_pos_seq)**2
+            # print('loss mean', lo.mean(axis=(1, 2)))
 
             return loss
 
@@ -160,20 +155,92 @@ class SolverMatChamfer:
         best_material = None
         best_loss = 1e10
 
+        steps = []
+        ct0_vals = []
+        ct1_vals = []
+        ct2_vals = []
+        loss_vals = []
+
         actions = init_actions
         for iter in range(self.cfg.n_iters):
+            print('iter', iter, '/', self.cfg.n_iters)
+            material_params = torch.stack([m_YS, m_E, m_nu])
             # self.params = actions.copy() # not doing anything
             loss = forward(env_state['state'], actions, material_params, ppos_seq_target)
-            print('material_params', material_params)
-            print('material_params grad', material_params.grad)
-            print('loss ', loss)
             if loss < best_loss:
                 best_loss = loss
                 best_material = material_params.clone()
             
             optimizer.zero_grad()
             loss.backward(retain_graph=True)
+            print('material_params', material_params)
+            print('material_params grad', material_params.grad)
+            print('loss ', loss)
+            # m_YS.grad = material_params.grad[0]
+            # m_E.grad = material_params.grad[1]
+            # m_nu.grad = material_params.grad[2]
+            print('mat', m_YS, m_E, m_nu)
+            print('mat grad', m_YS.grad, m_E.grad, m_nu.grad)
+
+            # exit()
             optimizer.step()
+
+            
+            # m_YS = m_YS.clamp(0, 1)
+            # m_E = m_E.clamp(0, 1)
+            # m_nu = m_nu.clamp(0, 1)
+
+            # with torch.no_grad():
+                # material_params[:] = material_params.clamp(0, 1)
+
+            steps.append(iter)
+            ct0_vals.append(material_params.detach().numpy()[0])
+            ct1_vals.append(material_params.detach().numpy()[1])
+            ct2_vals.append(material_params.detach().numpy()[2])
+            loss_vals.append(loss.detach().numpy())
+        
+            import matplotlib.pyplot as plt
+
+            xpoints = np.array(steps)
+            ypoints = np.array(ct0_vals)
+
+            plt.clf()
+            plt.plot(xpoints, ypoints)
+            plt.title('Optimizing YS value')
+            plt.xlabel('steps')
+            plt.ylabel('YS')
+            plt.savefig('output/ct0.png')
+            plt.clf()
+
+            xpoints = np.array(steps)
+            ypoints = np.array(ct1_vals)
+
+            plt.plot(xpoints, ypoints)
+            plt.title('Optimizing E value')
+            plt.xlabel('steps')
+            plt.ylabel('E')
+            plt.savefig('output/ct1.png')
+            plt.clf()
+
+            xpoints = np.array(steps)
+            ypoints = np.array(ct2_vals)
+
+            plt.plot(xpoints, ypoints)
+            plt.title('Optimizing nu value')
+            plt.xlabel('steps')
+            plt.ylabel('nu')
+            plt.savefig('output/ct2.png')
+            plt.clf()
+
+            xpoints = np.array(steps)
+            ypoints = np.array(loss_vals)
+
+            plt.plot(xpoints, ypoints)
+            plt.title('Loss while optimization')
+            plt.xlabel('steps')
+            plt.ylabel('Loss')
+            plt.savefig("output/loss.png")
+            plt.clf()
     
 
         env.set_state(**env_state)
