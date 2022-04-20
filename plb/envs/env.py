@@ -82,6 +82,7 @@ class PlasticineEnv(gym.Env):
         cfg.ENV.loss.target_path = os.path.join(PATH, '../', ''.join(name))
         cfg.ENV.loss.action_path = os.path.join(PATH, '../', cfg.ENV.loss.action_path)
         cfg.ENV.loss.ppos_path = os.path.join(PATH, '../', cfg.ENV.loss.ppos_path)
+        cfg.ENV.loss.grid_path = os.path.join(PATH, '../', cfg.ENV.loss.grid_path)
         cfg.VARIANTS = None
         cfg.freeze()
 

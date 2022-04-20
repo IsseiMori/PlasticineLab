@@ -79,9 +79,12 @@ class MPMSimulator:
     @ti.kernel
     def set_material_params_kernel(self):
         for p in range(0, self.n_particles):
-            yield_stress = self.material[0]
-            E = self.material[1]
-            nu = self.material[2]
+            # yield_stress = self.material[0]
+            # E = self.material[1]
+            # nu = self.material[2]
+            yield_stress = 5 + self.material[0] * 195
+            E = 100 + self.material[1] * 2900
+            nu = 0 + self.material[2] * 0.45
 
             mu = E / (2 * (1 + nu))
             lam = E * nu / ((1 + nu) * (1 - 2 * nu))  # Lame parameters
@@ -318,8 +321,9 @@ class MPMSimulator:
         self.g2p.grad(s)
         self.grid_op.grad(s)
 
-        for i in range(self.n_primitive-1, -1, -1):
-            self.primitives[i].forward_kinematics.grad(s)
+        # no need to calculate gradient for actions
+        # for i in range(self.n_primitive-1, -1, -1):
+        #     self.primitives[i].forward_kinematics.grad(s)
 
         self.p2g.grad(s)
         self.svd_grad()
@@ -358,6 +362,14 @@ class MPMSimulator:
         if ti.static(self.n_primitive>0):
             for i in ti.static(range(self.n_primitive)):
                 self.primitives[i].copy_frame(source, target)
+    
+    @ti.kernel
+    def copyframe_grad(self, source: ti.i32, target: ti.i32):
+        for i in range(self.n_particles):
+            self.x.grad[target, i] = self.x.grad[source, i]
+            self.v.grad[target, i] = self.v.grad[source, i]
+            self.F.grad[target, i] = self.F.grad[source, i]
+            self.C.grad[target, i] = self.C.grad[source, i]
 
     def get_state(self, f):
         x = np.zeros((self.n_particles, self.dim), dtype=np.float64)
@@ -435,18 +447,17 @@ class MPMSimulator:
         for s in range(start, self.cur):
             self.substep(s)
         
-        # self.copyframe(self.cur, 0) # copy to the first frame for simulation
+        self.copyframe(self.cur, 0) # copy to the first frame for simulation
         self.cur = 0
         
     @ti.complex_kernel_grad(step_kernel)
     def step_kernel_grad(self, action):
 
-        start = 0
+        start = 1
         self.cur = start + self.substeps
 
-        # self.copyframe.grad(self.cur, 0)
+        # self.copyframe_grad(0, 18)
 
-        print('substeps', self.cur)
         for s in reversed(range(start, self.cur)):
             self.substep_grad(s)
         

@@ -70,6 +70,7 @@ loss_weight.contact = 1
 loss.target_path = ''
 loss.action_path = ''
 loss.ppos_path = ''
+loss.grid_path = ''
 
 ENV.n_observed_particles = 200
 

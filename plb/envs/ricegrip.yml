@@ -48,6 +48,7 @@ VARIANTS:
         target_path: envs/assets/RiceGrip-v1.npy
         action_path: envs/assets/RiceGrip-action.npy
         ppos_path: envs/assets/RiceGrip-ppos.npy
+        grid_path: envs/assets/RiceGrip-grid.npy
   - SHAPES:
       - width: (0.20, 0.20, 0.20)
       - init_pos: (0.5, 0.1, 0.5)

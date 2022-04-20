@@ -36,7 +36,7 @@ class TaichiEnv:
             self.nn = MLP(self.simulator, self.primitives, (256, 256))
 
         if loss:
-            self.loss = LossSeq(cfg.ENV.loss, self.simulator)
+            self.loss = Loss(cfg.ENV.loss, self.simulator)
         else:
             self.loss = None
         self._is_copy = True
