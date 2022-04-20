@@ -79,9 +79,12 @@ class MPMSimulator:
     @ti.kernel
     def set_material_params_kernel(self):
         for p in range(0, self.n_particles):
-            yield_stress = self.material[0]
-            E = self.material[1]
-            nu = self.material[2]
+            # yield_stress = self.material[0]
+            # E = self.material[1]
+            # nu = self.material[2]
+            yield_stress = 5 + self.material[0] * 195
+            E = 100 + self.material[1] * 2900
+            nu = 0 + self.material[2] * 0.45
 
             mu = E / (2 * (1 + nu))
             lam = E * nu / ((1 + nu) * (1 - 2 * nu))  # Lame parameters
@@ -358,6 +361,14 @@ class MPMSimulator:
         if ti.static(self.n_primitive>0):
             for i in ti.static(range(self.n_primitive)):
                 self.primitives[i].copy_frame(source, target)
+    
+    @ti.kernel
+    def copyframe_grad(self, source: ti.i32, target: ti.i32):
+        for i in range(self.n_particles):
+            self.x.grad[target, i] = self.x.grad[source, i]
+            self.v.grad[target, i] = self.v.grad[source, i]
+            self.F.grad[target, i] = self.F.grad[source, i]
+            self.C.grad[target, i] = self.C.grad[source, i]
 
     def get_state(self, f):
         x = np.zeros((self.n_particles, self.dim), dtype=np.float64)
@@ -443,6 +454,8 @@ class MPMSimulator:
 
         start = 1
         self.cur = start + self.substeps
+
+        self.copyframe_grad(0, 18)
 
         for s in reversed(range(start, self.cur)):
             self.substep_grad(s)
