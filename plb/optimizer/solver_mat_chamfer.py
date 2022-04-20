@@ -106,7 +106,7 @@ class SolverMatChamfer:
         # material_params = torch.tensor([0.5, 0.5, 0.5], requires_grad=True)
         # optimizer = torch.optim.Adam([material_params], lr=0.05)
         # optimizer = torch.optim.SGD([material_params], lr=0.00001, momentum=0.9)
-        optimizer = torch.optim.Adam([m_YS, m_E, m_nu], lr=1e-2)
+        optimizer = torch.optim.Adam([m_YS, m_E, m_nu], lr=1e-1)
         # optimizer = torch.optim.SGD([m_YS, m_E, m_nu], lr=1e-4, momentum=0.9)
 
 
@@ -138,7 +138,7 @@ class SolverMatChamfer:
             p_pos_seq = RunSimulation.apply(material, env, action, n_steps).to('cuda')
 
             # with open('ppos_opt.npy', 'wb') as f:
-            #     np.save(f, p_pos_seq.detach().numpy())
+            #     np.save(f, p_pos_seq.to("cpu").detach().numpy())
             # exit()
             # with open('ppos_seq_target.npy', 'wb') as f:
             #     np.save(f, ppos_seq_target.detach().numpy())
@@ -154,7 +154,7 @@ class SolverMatChamfer:
         # best_action = None
         best_material = None
         best_loss = 1e10
-        n_steps = 15 # len(init_actions)-1
+        n_steps = 2 # len(init_actions)-1
 
         steps = []
         ct0_vals = []
