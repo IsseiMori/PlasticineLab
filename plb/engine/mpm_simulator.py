@@ -321,8 +321,9 @@ class MPMSimulator:
         self.g2p.grad(s)
         self.grid_op.grad(s)
 
-        for i in range(self.n_primitive-1, -1, -1):
-            self.primitives[i].forward_kinematics.grad(s)
+        # no need to calculate gradient for actions
+        # for i in range(self.n_primitive-1, -1, -1):
+        #     self.primitives[i].forward_kinematics.grad(s)
 
         self.p2g.grad(s)
         self.svd_grad()
@@ -455,7 +456,7 @@ class MPMSimulator:
         start = 1
         self.cur = start + self.substeps
 
-        self.copyframe_grad(0, 18)
+        # self.copyframe_grad(0, 18)
 
         for s in reversed(range(start, self.cur)):
             self.substep_grad(s)
