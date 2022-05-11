@@ -55,34 +55,67 @@ VARIANTS:
     PRIMITIVES:
       - init_pos: (0.2, 0.2, 0.2)
       - init_pos: (0.2, 0.2, 0.2)
+      - size: ( 0.02338123014763897 ,  0.16 ,  0.053927846336419547 )
+      - size: ( 0.04044096610999861 ,  0.16 ,  0.03645960283623101 )
     ENV:
       loss:
-        target_path: envs/assets/RiceGrip-v2.npy
-        action_path: envs/assets/RiceGrip-action.npy
+        target_path: envs/assets/RiceGrip-v1.npy
+        action_path: envs/sysid/RiceGrip0-action-00000.npy
+        ppos_path: envs/sysid/RiceGrip0-ppos-00000.npy
+        grid_path: envs/assets/RiceGrip-grid.npy
   - SHAPES:
       - width: (0.20, 0.20, 0.20)
       - init_pos: (0.5, 0.1, 0.5)
     PRIMITIVES:
       - init_pos: (0.2, 0.2, 0.2)
       - init_pos: (0.2, 0.2, 0.2)
+      - size: ( 0.06512213375481732 ,  0.16 ,  0.029269854832255165 )
+      - size: ( 0.04953138598294193 ,  0.16 ,  0.04631681333194428 )
     ENV:
       loss:
         target_path: envs/assets/RiceGrip-v1.npy
+        action_path: envs/sysid/RiceGrip1-action-00001.npy
+        ppos_path: envs/sysid/RiceGrip1-ppos-00001.npy
+        grid_path: envs/assets/RiceGrip-grid.npy
   - SHAPES:
       - width: (0.20, 0.20, 0.20)
       - init_pos: (0.5, 0.1, 0.5)
     PRIMITIVES:
       - init_pos: (0.2, 0.2, 0.2)
       - init_pos: (0.2, 0.2, 0.2)
+      - size: ( 0.06241668862033697 ,  0.16 ,  0.039118197961264686 )
+      - size: ( 0.04568695805164952 ,  0.16 ,  0.0328525407096152 )
     ENV:
       loss:
         target_path: envs/assets/RiceGrip-v1.npy
+        action_path: envs/sysid/RiceGrip2-action-00002.npy
+        ppos_path: envs/sysid/RiceGrip2-ppos-00002.npy
+        grid_path: envs/assets/RiceGrip-grid.npy
   - SHAPES:
       - width: (0.20, 0.20, 0.20)
       - init_pos: (0.5, 0.1, 0.5)
     PRIMITIVES:
       - init_pos: (0.2, 0.2, 0.2)
       - init_pos: (0.2, 0.2, 0.2)
+      - size: ( 0.017070957562009298 ,  0.16 ,  0.021739922442740672 )
+      - size: ( 0.03581353291079729 ,  0.16 ,  0.05828690848284884 )
     ENV:
       loss:
         target_path: envs/assets/RiceGrip-v1.npy
+        action_path: envs/sysid/RiceGrip3-action-00003.npy
+        ppos_path: envs/sysid/RiceGrip3-ppos-00003.npy
+        grid_path: envs/assets/RiceGrip-grid.npy
+  - SHAPES:
+      - width: (0.20, 0.20, 0.20)
+      - init_pos: (0.5, 0.1, 0.5)
+    PRIMITIVES:
+      - init_pos: (0.2, 0.2, 0.2)
+      - init_pos: (0.2, 0.2, 0.2)
+      - size: ( 0.020041320257059986 ,  0.16 ,  0.06561447444403286 )
+      - size: ( 0.0397158454846688 ,  0.16 ,  0.027470421569954905 )
+    ENV:
+      loss:
+        target_path: envs/assets/RiceGrip-v1.npy
+        action_path: envs/sysid/RiceGrip4-action-00004.npy
+        ppos_path: envs/sysid/RiceGrip4-ppos-00004.npy
+        grid_path: envs/assets/RiceGrip-grid.npy
