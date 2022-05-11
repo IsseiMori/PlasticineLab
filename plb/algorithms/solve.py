@@ -1,5 +1,7 @@
 import argparse
 import random
+
+from pkg_resources import require
 import numpy as np
 import torch
 
@@ -40,6 +42,12 @@ def get_args():
     parser.add_argument("--lr", type=float, default=0.1)
     parser.add_argument("--softness", type=float, default=666.)
     parser.add_argument("--optim", type=str, default='Adam', choices=['Adam', 'Momentum'])
+
+    parser.add_argument("--data_name", type=str, default="0000")
+    parser.add_argument("--data_path", type=str, required=True)
+    parser.add_argument("--views", type=str, default="views.json")
+    parser.add_argument("--opt_steps", type=int, required=True)
+    parser.add_argument("--finite_difference", action='store_true')
 
     args=parser.parse_args()
 
