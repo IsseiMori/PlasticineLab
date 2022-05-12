@@ -447,7 +447,7 @@ class SolverMatChamfer:
             self.plot_progress('YS Gradient', 'steps', 'YS grad', np.array(steps), np.array(ct0_grad_vals), os.path.join(output_path, 'ct0_grad.png'))
             self.plot_progress('E Gradient', 'steps', 'E grad', np.array(steps), np.array(ct1_grad_vals), os.path.join(output_path, 'ct1_grad.png'))
             self.plot_progress('nu Gradient', 'steps', 'nu grad', np.array(steps), np.array(ct2_grad_vals), os.path.join(output_path, 'ct2_grad.png'))
-            self.plot_progress('Loss while optimization', 'steps', 'Loss', np.array(steps), np.array(loss_vals), os.path.join(output_path, 'loss.png'))
+            self.plot_progress('Loss while optimization', 'steps', 'Loss', np.array(steps), np.array(loss_vals), os.path.join(output_path, 'loss.png'), loss_gt)
     
         with torch.no_grad():
             print("infer with best material parameters")
