@@ -195,6 +195,9 @@ class SolverMatChamfer:
 
         output_path = os.path.join(path_output, data_name)
 
+        if finite_difference:
+            output_path = os.path.join(path_output, data_name + "fd")
+
         with open(os.path.join(data_path, view_file), 'r') as f:
             views = json.load(f)
 
