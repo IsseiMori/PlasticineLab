@@ -145,8 +145,16 @@ class SolverMatChamfer:
         env.simulator.material.from_torch(material_params)
         env.simulator.set_material_params_kernel()
 
+        ti_positions = ti.field(dtype=ti.f64, shape=(n_steps, 5000, 3), needs_grad=False)
+
         for s in range(n_steps):
             env.simulator.step_kernel(action[s])
+
+            for i in range(env.simulator.n_particles):
+                for j in ti.static(range(env.simulator.dim)):
+                    ti_positions[s, i, j] = env.simulator.x[18, i][j]
+        
+        return ti_positions.to_torch()
 
 
     def solve(self, data_name, data_path, view_file, n_steps_opt, lr, finite_difference, init_actions=None, callbacks=()):
@@ -258,7 +266,7 @@ class SolverMatChamfer:
         ])).to('cuda')
 
 
-        def forward(sim_state, action, material, n_steps, iter, output_path):
+        def forward(sim_state, action, material, n_steps, iter, output_path, finite_difference):
             if self.logger is not None:
                 self.logger.reset()
             
@@ -268,9 +276,10 @@ class SolverMatChamfer:
 
             env.set_state(sim_state, self.cfg.softness, False)
 
-            # self.forward_wo_grad(material, action, n_steps_warmup).to('cuda')
-
-            p_pos_seq = RunSimulation.apply(material, env, action, n_steps_warmup, n_steps).to('cuda')
+            if finite_difference:
+                p_pos_seq = self.forward_wo_grad(material, action, n_steps).to('cuda')
+            else:
+                p_pos_seq = RunSimulation.apply(material, env, action, n_steps_warmup, n_steps).to('cuda')
 
             predicted_depths = []
 
@@ -346,7 +355,7 @@ class SolverMatChamfer:
             m_E_gt = torch.tensor(m_E_target, dtype=torch.float64).requires_grad_(True)
             m_nu_gt = torch.tensor(m_nu_target, dtype=torch.float64).requires_grad_(True)
             material_params = torch.stack([m_YS_gt, m_E_gt, m_nu_gt])
-            loss_gt, loss_seq_gt, p_pos_seq_gt = forward(env_state['state'], actions, material_params, n_steps_opt, -1, output_path)
+            loss_gt, loss_seq_gt, p_pos_seq_gt = forward(env_state['state'], actions, material_params, n_steps_opt, -1, output_path, finite_difference)
             loss_gt = loss_gt.to("cpu").detach().numpy()
             loss_seq_gt = loss_seq_gt.to("cpu").detach().numpy()
             p_pos_seq_gt = p_pos_seq_gt.to("cpu").detach().numpy()
@@ -356,30 +365,29 @@ class SolverMatChamfer:
             print('iter', iter, '/', self.cfg.n_iters)
             material_params = torch.stack([m_YS, m_E, m_nu])
 
-            loss, loss_seq, _ = forward(env_state['state'], actions, material_params, n_steps_opt, iter, output_path)
-            if loss < best_loss:
-                best_loss = loss
-                best_material = material_params.clone()
             
             # print('loss = ', loss.to("cpu").detach().numpy())
 
             if finite_difference:
                 with torch.no_grad():
-                    eps = torch.tensor(1e-5)
+                    loss, loss_seq, _ = forward(env_state['state'], actions, material_params, n_steps_opt, iter, output_path, finite_difference)
+                    print('loss = ', loss.to("cpu").detach().numpy())
+
+                    eps = torch.tensor(1e-3)
                     material_params_e = torch.stack([m_YS+eps, m_E, m_nu])
-                    loss_e, loss_seq_e, _ = forward(env_state['state'], actions, material_params_e, n_steps_opt, iter, output_path)
+                    loss_e, loss_seq_e, _ = forward(env_state['state'], actions, material_params_e, n_steps_opt, iter, output_path, finite_difference)
                     fin_diff_YS = (loss_e - loss) / eps
                     print('loss YS = ', loss_e.to("cpu").detach().numpy())
                     print('YS fin_diff = ', fin_diff_YS.to("cpu").detach().numpy())
                     
                     material_params_e = torch.stack([m_YS, m_E+eps, m_nu])
-                    loss_e, loss_seq_e, _ = forward(env_state['state'], actions, material_params_e, n_steps_opt, iter, output_path)
+                    loss_e, loss_seq_e, _ = forward(env_state['state'], actions, material_params_e, n_steps_opt, iter, output_path, finite_difference)
                     fin_diff_E = (loss_e - loss) / eps
                     print('loss E = ', loss_e.to("cpu").detach().numpy())
                     print('E fin_diff = ', fin_diff_E.to("cpu").detach().numpy())
                     
                     material_params_e = torch.stack([m_YS+eps, m_E, m_nu])
-                    loss_e, loss_seq_e, _ = forward(env_state['state'], actions, material_params_e, n_steps_opt, iter, output_path)
+                    loss_e, loss_seq_e, _ = forward(env_state['state'], actions, material_params_e, n_steps_opt, iter, output_path, finite_difference)
                     fin_diff_nu = (loss_e - loss) / eps
                     print('loss nu = ', loss_e.to("cpu").detach().numpy())
                     print('nu fin_diff = ', fin_diff_nu.to("cpu").detach().numpy())
@@ -393,6 +401,8 @@ class SolverMatChamfer:
                     m_nu_grad = fin_diff_nu.to("cpu").detach().numpy().item()
             
             else:
+                loss, loss_seq, _ = forward(env_state['state'], actions, material_params, n_steps_opt, iter, output_path, finite_difference)
+
                 optimizer.zero_grad()
                 loss.backward(retain_graph=True)
 
@@ -401,6 +411,10 @@ class SolverMatChamfer:
                 m_nu_grad = m_YS.grad.detach().numpy().item()
 
                 optimizer.step()
+            
+            if loss < best_loss:
+                best_loss = loss
+                best_material = material_params.clone()
 
 
             print('loss =', loss.to("cpu").detach().numpy())
@@ -415,6 +429,8 @@ class SolverMatChamfer:
                 m_YS.clamp_(0, 1)
                 m_E.clamp_(0, 1)
                 m_nu.clamp_(0, 1)
+
+            print("after clamp")
 
 
             steps.append(iter)
@@ -451,10 +467,10 @@ class SolverMatChamfer:
             self.plot_progress('E Gradient', 'steps', 'E grad', np.array(steps), np.array(ct1_grad_vals), os.path.join(output_path, 'ct1_grad.png'))
             self.plot_progress('nu Gradient', 'steps', 'nu grad', np.array(steps), np.array(ct2_grad_vals), os.path.join(output_path, 'ct2_grad.png'))
             self.plot_progress('Loss while optimization', 'steps', 'Loss', np.array(steps), np.array(loss_vals), os.path.join(output_path, 'loss.png'), loss_gt)
-    
+
         with torch.no_grad():
             print("infer with best material parameters")
-            loss_best, loss_seq_best, p_pos_seq_best = forward(env_state['state'], actions, best_material, n_steps_opt, -2, output_path)
+            loss_best, loss_seq_best, p_pos_seq_best = forward(env_state['state'], actions, best_material, n_steps_opt, -2, output_path, finite_difference)
             print('loss =', loss_best.to("cpu").detach().numpy())
 
         env.set_state(**env_state)
