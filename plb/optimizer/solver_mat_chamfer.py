@@ -35,33 +35,24 @@ class RunSimulation(torch.autograd.Function):
 
         env.simulator.set_material_params_kernel()
 
-        # ti_grids = []
-        # ppos = []
         ctx.n_steps = n_steps
         ti_positions = ti.field(dtype=ti.f64, shape=(n_steps, 5000, 3), needs_grad=True)
 
         for s in range(n_steps):
-            env.simulator.step_kernel(action[n_steps_warmup+s])
+            env.simulator.step_kernel(action[n_steps_warmup+s], s)
 
-            # ti_positions = ti.field(dtype=ti.f32, shape=(5000, 3), needs_grad=True)
             for i in range(env.simulator.n_particles):
                 for j in ti.static(range(env.simulator.dim)):
-                    ti_positions[s, i, j] = env.simulator.x[18, i][j]
-
-                    
-        #     ppos.append(ti_positions.to_torch().numpy())
-        # env.simulator.step_kernel(action[0])
-
-        # ti_positions = ti.field(dtype=ti.f32, shape=(5000, 3), needs_grad=True)
+                    ti_positions[s, i, j] = env.simulator.x[19*s, i][j]
+        
+        # ti_positions = ti.field(dtype=ti.f64, shape=(1, 5000, 3), needs_grad=True)
         # for i in range(env.simulator.n_particles):
         #     for j in ti.static(range(env.simulator.dim)):
-        #         ti_positions[i, j] = env.simulator.x[18, i][j]
-        
+        #         ti_positions[0, i, j] = env.simulator.x[190, i][j]
+
         ctx.ti_positions = ti_positions
 
         return ti_positions.to_torch()
-        # return np.array(ppos)
-
 
     @staticmethod
     def backward(ctx, grad_output):
@@ -77,23 +68,21 @@ class RunSimulation(torch.autograd.Function):
 
         ti_positions.grad.from_torch(grad_output)
 
+        # for i in range(env.simulator.n_particles):
+        #     for j in ti.static(range(3)):
+        #         env.simulator.x.grad[190, i][j] = ti_positions.grad[0, i, j]
 
         for s in reversed(range(n_steps)):
             for i in range(env.simulator.n_particles):
                 for j in ti.static(range(3)):
-                    env.simulator.x.grad[18, i][j] = ti_positions.grad[s, i, j]
-            env.simulator.step_kernel_grad(action[n_steps_warmup+s])
-
-        # env.simulator.step_kernel_grad(action[0])
+                    env.simulator.x.grad[19*s, i][j] = ti_positions.grad[s, i, j]
+            env.simulator.step_kernel_grad(action[n_steps_warmup+s], s)
 
         env.simulator.set_material_params_kernel.grad()
     
         mat_grad = torch.empty(3)
         for i in range(3):
             mat_grad[i] = env.simulator.material.grad[i]
-            # params.grad[i] = env.simulator.material.grad[i]
-            # print('mat grad i ', env.simulator.material.grad[i])
-        # params_grad = env.simulator.material.grad.to_torch()
 
         return mat_grad, None, None, None, None
 
@@ -157,7 +146,7 @@ class SolverMatChamfer:
         return ti_positions.to_torch()
 
 
-    def solve(self, data_name, data_path, view_file, n_steps_opt, lr, finite_difference, init_actions=None, callbacks=()):
+    def solve(self, data_name, data_path, view_file, n_steps_opt, lr, finite_difference, experiment, init_actions=None, callbacks=()):
         env = self.env
 
 
@@ -201,10 +190,7 @@ class SolverMatChamfer:
         env_state = env.get_state()
         self.total_steps = 0
 
-        output_path = os.path.join(path_output, data_name)
-
-        if finite_difference:
-            output_path = os.path.join(path_output, data_name + "fd")
+        output_path = os.path.join(path_output, experiment, data_name)
 
         with open(os.path.join(data_path, view_file), 'r') as f:
             views = json.load(f)
@@ -266,7 +252,7 @@ class SolverMatChamfer:
         ])).to('cuda')
 
 
-        def forward(sim_state, action, material, n_steps, iter, output_path, finite_difference):
+        def forward(sim_state, action, material, n_steps, iter, output_path, finite_difference, depth_target_list=None):
             if self.logger is not None:
                 self.logger.reset()
             
@@ -282,6 +268,8 @@ class SolverMatChamfer:
                 p_pos_seq = RunSimulation.apply(material, env, action, n_steps_warmup, n_steps).to('cuda')
 
             predicted_depths = []
+
+            depth_trut_list = []
 
             loss_seq = []
             for step in range(n_steps):
@@ -307,6 +295,11 @@ class SolverMatChamfer:
                     depth_predicted[depth_predicted <= -100000] = -100
                     depth_true[depth_true==0] = -100
 
+                    # if iter == -1:
+                    #     depth_trut_list.append(depth_predicted)
+                    # else:
+                    #     depth_true = depth_target_list[step]
+
                     points_projected_true = unproject_torch(proj_matrix, proj_matrix_inv, depth_true)
                     points_projected_pred = unproject_torch(proj_matrix, proj_matrix_inv, depth_predicted)
 
@@ -331,7 +324,8 @@ class SolverMatChamfer:
             # iter = -2: best material
             if iter == 0 or iter % 10 == 0 or iter == -1 or iter == -2:
                 save_optimization_rollout(predicted_depths, ground_truth_depths[:, n_steps_warmup:], iter, views, output_path, n_steps, p_pos_seq.to("cpu").detach().numpy())
-            return loss, loss_seq, p_pos_seq
+            
+            return loss, loss_seq, p_pos_seq, depth_trut_list
 
         best_material = None
         best_loss = 1e10
@@ -355,11 +349,12 @@ class SolverMatChamfer:
             m_E_gt = torch.tensor(m_E_target, dtype=torch.float64).requires_grad_(True)
             m_nu_gt = torch.tensor(m_nu_target, dtype=torch.float64).requires_grad_(True)
             material_params = torch.stack([m_YS_gt, m_E_gt, m_nu_gt])
-            loss_gt, loss_seq_gt, p_pos_seq_gt = forward(env_state['state'], actions, material_params, n_steps_opt, -1, output_path, finite_difference)
+            loss_gt, loss_seq_gt, p_pos_seq_gt, depth_target_list = forward(env_state['state'], actions, material_params, n_steps_opt, -1, output_path, finite_difference)
             loss_gt = loss_gt.to("cpu").detach().numpy()
             loss_seq_gt = loss_seq_gt.to("cpu").detach().numpy()
             p_pos_seq_gt = p_pos_seq_gt.to("cpu").detach().numpy()
             print('target loss =', loss_gt)
+        
 
         for iter in range(self.cfg.n_iters):
             print('iter', iter, '/', self.cfg.n_iters)
@@ -401,14 +396,14 @@ class SolverMatChamfer:
                     m_nu_grad = fin_diff_nu.to("cpu").detach().numpy().item()
             
             else:
-                loss, loss_seq, _ = forward(env_state['state'], actions, material_params, n_steps_opt, iter, output_path, finite_difference)
+                loss, loss_seq, p_pos_seq, _ = forward(env_state['state'], actions, material_params, n_steps_opt, iter, output_path, finite_difference, depth_target_list)
 
                 optimizer.zero_grad()
                 loss.backward(retain_graph=True)
 
                 m_YS_grad = m_YS.grad.detach().numpy().item()
-                m_E_grad = m_YS.grad.detach().numpy().item()
-                m_nu_grad = m_YS.grad.detach().numpy().item()
+                m_E_grad = m_E.grad.detach().numpy().item()
+                m_nu_grad = m_nu.grad.detach().numpy().item()
 
                 optimizer.step()
             
@@ -455,8 +450,6 @@ class SolverMatChamfer:
                     "loss_seq": np.array(loss_seq_vals),
                     "loss_gt": loss_gt,
                     "loss_seq_gt": loss_seq_gt,
-                    "p_pos_seq_gt": p_pos_seq_gt,
-                    "p_pos_seq_target": states['x']
                 }
                 np.save(f, loss_info)
 
@@ -470,7 +463,7 @@ class SolverMatChamfer:
 
         with torch.no_grad():
             print("infer with best material parameters")
-            loss_best, loss_seq_best, p_pos_seq_best = forward(env_state['state'], actions, best_material, n_steps_opt, -2, output_path, finite_difference)
+            loss_best, loss_seq_best, p_pos_seq_best, _ = forward(env_state['state'], actions, best_material, n_steps_opt, -2, output_path, finite_difference, depth_target_list)
             print('loss =', loss_best.to("cpu").detach().numpy())
 
         env.set_state(**env_state)
@@ -557,7 +550,8 @@ def solve_mat_chamfer(env, path, logger, args):
                                 view_file=args.views, 
                                 n_steps_opt=args.opt_steps, 
                                 lr=args.lr, 
-                                finite_difference=args.finite_difference)
+                                finite_difference=args.finite_difference,
+                                experiment=args.experiment)
 
     # taichi_env.simulator.set_material(mat)
 
